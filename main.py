@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 import joblib
 import pandas as pd
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score # <<-- IMPORT METRIK
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # --- Inisialisasi Aplikasi FastAPI ---
 app = FastAPI(
@@ -28,24 +28,43 @@ app.add_middleware(
 )
 
 # --- Load Model Prediksi ---
-model_rf = None
-model_dt = None
+model_rf_ke5 = None
+model_dt_ke5 = None
+model_rf_baseline = None # Changed variable name
+model_dt_baseline = None # Changed variable name
 
 try:
-    model_rf = joblib.load('best_rf_model_ke5.pkl')
-    print("Random Forest model loaded successfully!")
+    model_rf_ke5 = joblib.load('best_rf_model_ke5.pkl')
+    print("Random Forest model (ke5) loaded successfully!")
 except FileNotFoundError:
     print("Error: 'best_rf_model_ke5.pkl' not found. Make sure it's in the same directory as main.py.")
 except Exception as e:
-    print(f"Error loading Random Forest model: {e}")
+    print(f"Error loading Random Forest model (ke5): {e}")
 
 try:
-    model_dt = joblib.load('best_dt_model_ke5.pkl')
-    print("Decision Tree model loaded successfully!")
+    model_dt_ke5 = joblib.load('best_dt_model_ke5.pkl')
+    print("Decision Tree model (ke5) loaded successfully!")
 except FileNotFoundError:
     print("Error: 'best_dt_model_ke5.pkl' not found. Make sure it's in the same directory as main.py.")
 except Exception as e:
-    print(f"Error loading Decision Tree model: {e}")
+    print(f"Error loading Decision Tree model (ke5): {e}")
+
+# Load the new models (now baseline models)
+try:
+    model_rf_baseline = joblib.load('baseline_rf_model.pkl') # Changed file name
+    print("Random Forest model (baseline) loaded successfully!")
+except FileNotFoundError:
+    print("Error: 'baseline_rf_model.pkl' not found. Make sure it's in the same directory as main.py.")
+except Exception as e:
+    print(f"Error loading Random Forest model (baseline): {e}")
+
+try:
+    model_dt_baseline = joblib.load('baseline_dt_model.pkl') # Changed file name
+    print("Decision Tree model (baseline) loaded successfully!")
+except FileNotFoundError:
+    print("Error: 'baseline_dt_model.pkl' not found. Make sure it's in the same directory as main.py.")
+except Exception as e:
+    print(f"Error loading Decision Tree model (baseline): {e}")
 
 # --- Definisi Struktur Data Input (Pydantic Model) ---
 class PredictionInput(BaseModel):
@@ -60,7 +79,7 @@ class PredictionInput(BaseModel):
     aspd_literasi: float
     rata_rata_literasi1: float
     bahasa_indonesia2: float
-    nilai_aktual: float | None = None # <<-- FIELD BARU: Nilai Aktual (opsional)
+    nilai_aktual: float | None = None
 
 # --- Mapping dari nama Pydantic (snake_case) ke nama Kolom Model Asli ---
 PYDANTIC_TO_MODEL_COL_MAPPING = {
@@ -122,8 +141,10 @@ async def read_root():
 # <<-- ENDPOINT BARU UNTUK PREDIKSI SEMUA MODEL -->>
 @app.post("/predict_all", summary="Prediksi dengan Semua Model dan Hitung Metrik")
 async def predict_all(data: PredictionInput):
-    rf_results = None
-    dt_results = None
+    rf_ke5_results = None
+    dt_ke5_results = None
+    rf_baseline_results = None # Changed variable name
+    dt_baseline_results = None # Changed variable name
 
     try:
         input_data_dict = data.model_dump()
@@ -135,34 +156,59 @@ async def predict_all(data: PredictionInput):
         }
         input_df = pd.DataFrame([mapped_data])
 
-        # --- Prediksi dengan Random Forest ---
-        if model_rf is None:
-            raise HTTPException(status_code=500, detail="Random Forest model not loaded.")
+        # --- Prediksi dengan Random Forest ke5 ---
+        if model_rf_ke5 is None:
+            raise HTTPException(status_code=500, detail="Random Forest model (ke5) not loaded.")
         
-        rf_input_df = input_df.copy() # Buat salinan agar tidak mempengaruhi urutan kolom model lain
-        if hasattr(model_rf, 'feature_names_in_') and model_rf.feature_names_in_ is not None:
-             rf_input_df = rf_input_df[list(model_rf.feature_names_in_)]
+        rf_ke5_input_df = input_df.copy() # Buat salinan agar tidak mempengaruhi urutan kolom model lain
+        if hasattr(model_rf_ke5, 'feature_names_in_') and model_rf_ke5.feature_names_in_ is not None:
+              rf_ke5_input_df = rf_ke5_input_df[list(model_rf_ke5.feature_names_in_)]
         else:
-             rf_input_df = rf_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
+              rf_ke5_input_df = rf_ke5_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
         
-        rf_results = make_prediction_and_evaluate(model_rf, rf_input_df, actual_value)
+        rf_ke5_results = make_prediction_and_evaluate(model_rf_ke5, rf_ke5_input_df, actual_value)
 
-
-        # --- Prediksi dengan Decision Tree ---
-        if model_dt is None:
-            raise HTTPException(status_code=500, detail="Decision Tree model not loaded.")
+        # --- Prediksi dengan Decision Tree ke5 ---
+        if model_dt_ke5 is None:
+            raise HTTPException(status_code=500, detail="Decision Tree model (ke5) not loaded.")
         
-        dt_input_df = input_df.copy() # Buat salinan
-        if hasattr(model_dt, 'feature_names_in_') and model_dt.feature_names_in_ is not None:
-            dt_input_df = dt_input_df[list(model_dt.feature_names_in_)]
+        dt_ke5_input_df = input_df.copy() # Buat salinan
+        if hasattr(model_dt_ke5, 'feature_names_in_') and model_dt_ke5.feature_names_in_ is not None:
+            dt_ke5_input_df = dt_ke5_input_df[list(model_dt_ke5.feature_names_in_)]
         else:
-            dt_input_df = dt_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
+            dt_ke5_input_df = dt_ke5_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
         
-        dt_results = make_prediction_and_evaluate(model_dt, dt_input_df, actual_value)
+        dt_ke5_results = make_prediction_and_evaluate(model_dt_ke5, dt_ke5_input_df, actual_value)
+
+        # --- Prediksi dengan Random Forest Baseline ---
+        if model_rf_baseline is None: # Changed variable name
+            raise HTTPException(status_code=500, detail="Random Forest model (baseline) not loaded.")
+        
+        rf_baseline_input_df = input_df.copy() # Changed variable name
+        if hasattr(model_rf_baseline, 'feature_names_in_') and model_rf_baseline.feature_names_in_ is not None: # Changed variable name
+              rf_baseline_input_df = rf_baseline_input_df[list(model_rf_baseline.feature_names_in_)] # Changed variable name
+        else:
+              rf_baseline_input_df = rf_baseline_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
+        
+        rf_baseline_results = make_prediction_and_evaluate(model_rf_baseline, rf_baseline_input_df, actual_value) # Changed variable name
+
+        # --- Prediksi dengan Decision Tree Baseline ---
+        if model_dt_baseline is None: # Changed variable name
+            raise HTTPException(status_code=500, detail="Decision Tree model (baseline) not loaded.")
+        
+        dt_baseline_input_df = input_df.copy() # Changed variable name
+        if hasattr(model_dt_baseline, 'feature_names_in_') and model_dt_baseline.feature_names_in_ is not None: # Changed variable name
+            dt_baseline_input_df = dt_baseline_input_df[list(model_dt_baseline.feature_names_in_)] # Changed variable name
+        else:
+            dt_baseline_input_df = dt_baseline_input_df[EXPECTED_MODEL_COLUMNS_ORDER]
+        
+        dt_baseline_results = make_prediction_and_evaluate(model_dt_baseline, dt_baseline_input_df, actual_value) # Changed variable name
 
         return {
-            "rf_results": rf_results,
-            "dt_results": dt_results
+            "rf_ke5_results": rf_ke5_results,
+            "dt_ke5_results": dt_ke5_results,
+            "rf_baseline_results": rf_baseline_results, # Changed key in response
+            "dt_baseline_results": dt_baseline_results  # Changed key in response
         }
 
     except ValueError as ve:
@@ -171,16 +217,3 @@ async def predict_all(data: PredictionInput):
         raise HTTPException(status_code=422, detail=f"Error mapping input features: {ke}. Check PYDANTIC_TO_MODEL_COL_MAPPING and input data.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred during prediction: {e}")
-
-# Opsional: Anda bisa menghapus endpoint /predict_rf dan /predict_dt yang lama
-# jika Anda hanya ingin menggunakan endpoint /predict_all
-
-# @app.post("/predict_rf", summary="Prediksi dengan Random Forest Model (Lama)")
-# async def predict_rf_old(data: PredictionInput):
-#     # ... kode lama ...
-#     pass
-
-# @app.post("/predict_dt", summary="Prediksi dengan Decision Tree Model (Lama)")
-# async def predict_dt_old(data: PredictionInput):
-#     # ... kode lama ...
-#     pass
